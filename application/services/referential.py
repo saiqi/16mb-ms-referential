@@ -52,11 +52,11 @@ class ReferentialService(object):
         )
 
     @rpc
-    def get_entity_by_id(self, id):
-        entity = self.database.entities.find_one({'id': id}, {'_id': 0})
+    def get_entity_by_id(self, id, with_timeline=False):
+        entity = self.database.entities.find_one({'id': id}, {'_id': 0, 'timeline': with_timeline})
         return bson.json_util.dumps(entity)
 
     @rpc
-    def get_entity_by_name(self, name):
-        cursor = self.database.entities.find({'$text': {'$search': name}}, {'_id': 0})
+    def get_entity_by_name(self, name, with_timeline=False):
+        cursor = self.database.entities.find({'$text': {'$search': name}}, {'_id': 0, 'timeline': with_timeline})
         return bson.json_util.dumps(list(cursor))
