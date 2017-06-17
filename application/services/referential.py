@@ -4,6 +4,7 @@ from pymongo import TEXT
 import bson.json_util
 import dateutil.parser
 
+
 class ReferentialService(object):
     name = 'referential'
 
@@ -14,7 +15,7 @@ class ReferentialService(object):
         self.database.entities.create_index('id')
 
         self.database.entities.create_index([('common_name', TEXT),
-                                            ('internationalization.translation', TEXT)],
+                                             ('internationalization.translation', TEXT)],
                                             default_language='english')
 
         self.database.entities.update_one(
@@ -32,22 +33,26 @@ class ReferentialService(object):
     def add_translation(self, id, language, translation):
         self.database.entities.update_one(
             {'id': id},
-            {'$push': {'internationalization': {'language': language, 'translation': translation}}})
+            {'$addToSet': {'internationalization': {'language': language, 'translation': translation}}})
+
+    @rpc
+    def remove_translation(self, id, language):
+        self.database.entities.update_one({'id': id},{'$pull': {'internationalization': {'language': language}}})
 
     @rpc
     def add_timeline_entry(self, id, date, provider, type, source, content):
         p_date = dateutil.parser.parse(date)
         self.database.entities.update_one(
             {'id': id},
-            {'$push': {
-                     'timeline': {
-                         'date': p_date,
-                         'provider': provider,
-                         'type': type,
-                         'source': source,
-                         'content': content
-                     }
-                 }
+            {'$addToSet': {
+                'timeline': {
+                    'date': p_date,
+                    'provider': provider,
+                    'type': type,
+                    'source': source,
+                    'content': content
+                }
+            }
             }
         )
 

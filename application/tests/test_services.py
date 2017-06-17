@@ -45,6 +45,19 @@ def test_add_translation(database):
     assert result['internationalization'][0]['translation'] == 'La gueule de bois'
 
 
+def test_remove_translation(database):
+    service = worker_factory(ReferentialService, database=database)
+
+    database.entities.insert_one({'id': '0', 'common_name': 'The Hangover', 'provider': 'me',
+                                  'type': 'movie', 'informations': {'starring': 'Bradley Cooper'},
+                                  'internationalization': [{'language': 'fr', 'translation': 'La gueule de bois'}]})
+    database.entities.create_index('id')
+
+    service.remove_translation('0', 'fr')
+    result = database.entities.find_one({'id': '0'})
+    assert len(result['internationalization']) == 0
+
+
 def test_get_entity_by_id(database):
     service = worker_factory(ReferentialService, database=database)
 
