@@ -4,7 +4,7 @@ import tempfile
 import base64
 from nameko.rpc import rpc
 from nameko_mongodb.database import MongoDatabase
-from pymongo import TEXT
+from pymongo import TEXT, ASCENDING
 import gridfs
 import bson.json_util
 import dateutil.parser
@@ -111,7 +111,7 @@ class ReferentialService(object):
         return bson.json_util.dumps(entity)
 
     @rpc
-    def get_entity_by_name(self, name, with_timeline=False):
+    def get_entities_by_name(self, name, with_timeline=False):
         cursor = self.database.entities.find({'$text': {'$search': name}}, {'_id': 0, 'timeline': with_timeline})
         return bson.json_util.dumps(list(cursor))
 
@@ -126,3 +126,36 @@ class ReferentialService(object):
             return base64.b64encode(binascii.unhexlify(file.read())).decode('utf-8')
 
         return None
+
+    @rpc
+    def add_label(self, id, language, label):
+        self.database.labels.create_index([('id', ASCENDING), ('language', ASCENDING)], unique=True)
+
+        self.database.labels.update_one({'id': id, 'language': language},
+                                        {'$set': {'label': label}}, upsert=True)
+
+        return {'id': id, 'language': language}
+
+    @rpc
+    def delete_label(self, id, language):
+        self.database.labels.delete_one({'id': id, 'language': language})
+
+        return {'id': id, 'language': language}
+
+    @rpc
+    def get_labels_by_id_and_language(self, ids, language):
+        if type(ids) == list:
+            cursor = self.database.labels.find({
+                'id': {'$in': ids},
+                'language': language}, {'_id': 0})
+            return list(cursor)
+
+        return self.database.labels.find_one({'id': ids, 'language': language}, {'_id': 0})
+
+    @rpc
+    def get_labels_by_id(self, ids):
+        if type(ids) == list:
+            cursor = self.database.labels.find({'id': {'$in': ids}}, {'_id': 0})
+            return list(cursor)
+
+        return list(self.database.labels.find({'id': ids}, {'_id': 0}))
