@@ -92,17 +92,80 @@ def test_get_entity_by_name(database):
     assert len(result) == 0
 
 
-def test_add_timeline_entry(database):
+def test_add_event(database):
     service = worker_factory(ReferentialService, database=database)
 
-    database.entities.insert_one({'id': '0', 'common_name': 'The Hangover', 'provider': 'me',
-                                  'type': 'movie', 'informations': {'starring': 'Bradley Cooper'}})
-    database.entities.create_index('id')
+    service.add_event('0', datetime.datetime.now().isoformat(), 'provider', 'type', 'Name', 'New Movie', ['Bradley'])
 
-    service.add_timeline_entry('0', datetime.datetime.now().isoformat(), 'me', 'new', 'reading', 'new movie')
+    result = database.events.find_one({'id': '0'})
+    assert result['id'] == '0'
 
-    result = database.entities.find_one({'id': '0'})
-    assert result['timeline'][0]
+
+def test_get_event_by_id(database):
+    service = worker_factory(ReferentialService, database=database)
+    database.events.insert_one({
+        'id': '0',
+        'date': datetime.datetime.now(),
+        'provider': 'provider',
+        'type': 'type',
+        'common_name': 'Name',
+        'content': 'New Movie',
+        'entities': [{'common_name': 'Bradley', 'id': 'b1'}]
+    })
+    event = bson.json_util.loads(service.get_event_by_id('0'))
+    assert event['id'] == '0'
+
+
+def test_get_events_by_entity_id(database):
+    service = worker_factory(ReferentialService, database=database)
+    database.events.insert_many([
+        {
+            'id': '0',
+            'date': datetime.datetime.now(),
+            'provider': 'provider',
+            'type': 'type',
+            'common_name': 'Name',
+            'content': 'New Movie',
+            'entities': [{'common_name': 'Bradley', 'id': 'b1'}]
+        },
+        {
+            'id': '1',
+            'date': datetime.datetime.now(),
+            'provider': 'provider',
+            'type': 'type',
+            'common_name': 'Name',
+            'content': 'New Movie',
+            'entities': [{'common_name': 'Bradley', 'id': 'b1'}]
+        },
+        {
+            'id': '2',
+            'date': datetime.datetime.now(),
+            'provider': 'provider',
+            'type': 'type',
+            'common_name': 'Name',
+            'content': 'New Movie',
+            'entities': [{'common_name': 'Johnny', 'id': 'j1'}]
+        }
+    ])
+    result = bson.json_util.loads(service.get_events_by_entity_id('b1'))
+    assert len(result) == 2
+
+
+def test_get_events_by_name(database):
+    service = worker_factory(ReferentialService, database=database)
+    database.events.create_index([('common_name', TEXT)], default_language='english')
+    database.events.insert_one({
+        'id': '0',
+        'date': datetime.datetime.now(),
+        'provider': 'provider',
+        'type': 'type',
+        'common_name': 'Name',
+        'content': 'New Movie',
+        'entities': [{'common_name': 'Bradley', 'id': 'b1'}]
+    })
+    res = bson.json_util.loads(service.get_events_by_name('name'))
+    assert len(res) == 1
+    assert res[0]['id'] == '0'
 
 
 def test_add_picture_to_entity(database):

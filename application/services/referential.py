@@ -4,7 +4,7 @@ import tempfile
 import base64
 from nameko.rpc import rpc
 from nameko_mongodb.database import MongoDatabase
-from pymongo import TEXT, ASCENDING
+from pymongo import TEXT, ASCENDING, DESCENDING
 import gridfs
 import bson.json_util
 import dateutil.parser
@@ -23,7 +23,6 @@ class ReferentialService(object):
     @rpc
     def add_entity(self, id, common_name, provider, type, informations):
         self.database.entities.create_index('id')
-
         self.database.entities.create_index([('common_name', TEXT),
                                              ('internationalization.translation', TEXT)],
                                             default_language='english')
@@ -86,33 +85,13 @@ class ReferentialService(object):
         return {'id': id, 'context': context, 'format': format}
 
     @rpc
-    def add_timeline_entry(self, id, date, provider, type, source, content):
-        p_date = dateutil.parser.parse(date)
-        self.database.entities.update_one(
-            {'id': id},
-            {
-                '$addToSet': {
-                    'timeline': {
-                        'date': p_date,
-                        'provider': provider,
-                        'type': type,
-                        'source': source,
-                        'content': content
-                    }
-                }
-            }
-        )
-
-        return {'id': id, 'date': date, 'provider': provider, 'type': type, 'source': source}
-
-    @rpc
-    def get_entity_by_id(self, id, with_timeline=False):
-        entity = self.database.entities.find_one({'id': id}, {'_id': 0, 'timeline': with_timeline})
+    def get_entity_by_id(self, id):
+        entity = self.database.entities.find_one({'id': id}, {'_id': 0})
         return bson.json_util.dumps(entity)
 
     @rpc
-    def get_entities_by_name(self, name, with_timeline=False):
-        cursor = self.database.entities.find({'$text': {'$search': name}}, {'_id': 0, 'timeline': with_timeline})
+    def get_entities_by_name(self, name):
+        cursor = self.database.entities.find({'$text': {'$search': name}}, {'_id': 0})
         return bson.json_util.dumps(list(cursor))
 
     @rpc
@@ -126,6 +105,45 @@ class ReferentialService(object):
             return base64.b64encode(binascii.unhexlify(file.read())).decode('utf-8')
 
         return None
+
+    @rpc
+    def add_event(self, id, date, provider, type, common_name, content, entities):
+        self.database.events.create_index([('entities.id', ASCENDING), ('date', DESCENDING)])
+        self.database.events.create_index('id', unique=True)
+        self.database.events.create_index([('common_name', TEXT)], default_language='english')
+
+        p_date = dateutil.parser.parse(date)
+
+        self.database.events.update_one(
+            {'id': id},
+            {
+                '$set': {
+                    'date': p_date,
+                    'provider': provider,
+                    'type': type,
+                    'common_name': common_name,
+                    'content': content,
+                    'entities': entities
+                }
+            }, upsert=True
+        )
+
+        return {'id': id, 'date': date, 'provider': provider, 'type': type, 'common_name': common_name}
+
+    @rpc
+    def get_event_by_id(self, id):
+        event = self.database.events.find_one({'id': id}, {'_id': 0})
+        return bson.json_util.dumps(event)
+
+    @rpc
+    def get_events_by_entity_id(self, entity_id):
+        cursor = self.database.events.find({'entities.id': entity_id}, {'_id': 0})
+        return bson.json_util.dumps(list(cursor))
+
+    @rpc
+    def get_events_by_name(self, name):
+        cursor = self.database.events.find({'$text': {'$search': name}}, {'_id': 0})
+        return bson.json_util.dumps(list(cursor))
 
     @rpc
     def add_label(self, id, language, label):
