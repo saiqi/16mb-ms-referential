@@ -2,12 +2,17 @@ import hashlib
 import binascii
 import tempfile
 import base64
+import datetime
 from nameko.rpc import rpc
 from nameko_mongodb.database import MongoDatabase
 from pymongo import TEXT, ASCENDING, DESCENDING
 import gridfs
 import bson.json_util
 import dateutil.parser
+
+
+class ReferentialServiceError(Exception):
+    pass
 
 
 class ReferentialService(object):
@@ -177,3 +182,42 @@ class ReferentialService(object):
             return list(cursor)
 
         return list(self.database.labels.find({'id': ids}, {'_id': 0}))
+
+    @rpc
+    def get_entity_or_event(self, search_documents):
+        result = dict()
+        for k, v in search_documents.items():
+            if v['event_or_entity'] == 'event':
+                start_date = dateutil.parser.parse(v['date'])
+                end_date = start_date + datetime.timedelta(days=1)
+                cursor = self.database.events.find({
+                    'date': {
+                        '$gte': start_date,
+                        '$lt': end_date
+                    },
+                    'type': v['type'],
+                    'provider': v['provider'],
+                    '$text': {
+                        '$search': v['name']
+                    }
+                }, {'entities': 0, '_id': 0})
+            else:
+                cursor = self.database.entities.find({
+                    'type': v['type'],
+                    'provider': v['provider'],
+                    '$text': {
+                        '$search': v['name']
+                    }
+                }, {'_id': 0})
+
+            search_results = list(cursor)
+
+            if len(search_results) > 1:
+                raise ReferentialServiceError('Too many results related to sent parameters in {}'.format(k))
+
+            if len(search_results) < 1:
+                raise ReferentialServiceError('No results related to sent parameters in {}'.format(k))
+
+            result[k] = search_results[0]
+
+        return bson.json_util.dumps(result)

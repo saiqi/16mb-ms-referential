@@ -9,7 +9,7 @@ from nameko.testing.services import worker_factory
 import bson.json_util
 import gridfs
 
-from application.services.referential import ReferentialService
+from application.services.referential import ReferentialService, ReferentialServiceError
 
 
 @pytest.fixture
@@ -265,3 +265,117 @@ def test_get_labels_by_id(database):
 
     labs = service.get_labels_by_id('0')
     assert len(labs) == 2
+
+
+def test_get_entity_or_event(database):
+    service = worker_factory(ReferentialService, database=database)
+    datetime.datetime(2017, 9, 25, 8, 0)
+    database.events.insert_many([
+        {
+            'id': '0',
+            'date': datetime.datetime(2017, 9, 25, 8, 0),
+            'provider': 'provider',
+            'type': 'new movie',
+            'common_name': 'Name',
+            'content': 'New Movie',
+            'entities': [{'common_name': 'Bradley', 'id': 'b1'}]
+        },
+        {
+            'id': '1',
+            'date': datetime.datetime(2017, 9, 26, 8, 0),
+            'provider': 'provider',
+            'type': 'new movie',
+            'common_name': 'Other',
+            'content': 'New Movie',
+            'entities': [{'common_name': 'Bradley', 'id': 'b1'}]
+        },
+        {
+            'id': '2',
+            'date': datetime.datetime(2017, 9, 15, 8, 0),
+            'provider': 'other_provider',
+            'type': 'new movie',
+            'common_name': 'Name',
+            'content': 'New Movie',
+            'entities': [{'common_name': 'Johnny', 'id': 'j1'}]
+        }
+    ])
+    database.events.create_index([('common_name', TEXT)], default_language='english')
+    database.entities.insert_one({'id': '0', 'common_name': 'The Hangover', 'provider': 'provider',
+                                  'type': 'movie', 'informations': {'starring': 'Bradley Cooper'},
+                                  'internationalization': [{'language': 'fr', 'translation': 'la gueule de bois'}]})
+    database.entities.create_index([('common_name', TEXT)], default_language='english')
+    search_documents = {
+        'param1': {
+            'event_or_entity': 'event',
+            'provider': 'provider',
+            'date': '2017-09-25',
+            'type': 'new movie',
+            'name': 'name'
+        }
+    }
+
+    res = bson.json_util.loads(service.get_entity_or_event(search_documents))
+    assert 'param1' in res
+    assert res['param1']
+    assert res['param1']['id'] == '0'
+
+    search_documents = {
+        'param2': {
+            'event_or_entity': 'entity',
+            'provider': 'provider',
+            'type': 'movie',
+            'name': 'hangover'
+        }
+    }
+
+    res = bson.json_util.loads(service.get_entity_or_event(search_documents))
+    assert 'param2' in res
+    assert res['param2']
+    assert res['param2']['id'] == '0'
+
+    search_documents = {
+        'param1': {
+            'event_or_entity': 'event',
+            'provider': 'provider',
+            'date': '2017-09-25',
+            'type': 'new movie',
+            'name': 'name'
+        },
+        'param2': {
+            'event_or_entity': 'entity',
+            'provider': 'provider',
+            'type': 'movie',
+            'name': 'hangover'
+        }
+    }
+
+    res = bson.json_util.loads(service.get_entity_or_event(search_documents))
+    assert 'param2' in res and 'param1' in res
+
+    search_documents = {
+        'param2': {
+            'event_or_entity': 'entity',
+            'provider': 'provider',
+            'type': 'movie',
+            'name': 'foobar'
+        }
+    }
+
+    with pytest.raises(ReferentialServiceError):
+        service.get_entity_or_event(search_documents)
+
+    database.entities.insert_one({'id': '1', 'common_name': 'The Hangover', 'provider': 'provider',
+                                  'type': 'movie', 'informations': {'starring': 'Bradley Cooper'},
+                                  'internationalization': [{'language': 'fr', 'translation': 'la gueule de bois'}]})
+
+    search_documents = {
+        'param2': {
+            'event_or_entity': 'entity',
+            'provider': 'provider',
+            'type': 'movie',
+            'name': 'hangover'
+        }
+    }
+
+    with pytest.raises(ReferentialServiceError):
+        service.get_entity_or_event(search_documents)
