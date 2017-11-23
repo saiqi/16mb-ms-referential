@@ -151,29 +151,30 @@ class ReferentialService(object):
         return bson.json_util.dumps(list(cursor))
 
     @rpc
-    def add_label(self, id, language, label):
-        self.database.labels.create_index([('id', ASCENDING), ('language', ASCENDING)], unique=True)
+    def add_label(self, id, language, context, label):
+        self.database.labels.create_index([('id', ASCENDING),
+                                           ('language', ASCENDING), ('context', ASCENDING)], unique=True)
 
-        self.database.labels.update_one({'id': id, 'language': language},
+        self.database.labels.update_one({'id': id, 'language': language, 'context': context},
                                         {'$set': {'label': label}}, upsert=True)
 
-        return {'id': id, 'language': language}
+        return {'id': id, 'language': language, 'context': context}
 
     @rpc
-    def delete_label(self, id, language):
-        self.database.labels.delete_one({'id': id, 'language': language})
+    def delete_label(self, id, language, context):
+        self.database.labels.delete_one({'id': id, 'language': language, 'context': context})
 
-        return {'id': id, 'language': language}
+        return {'id': id, 'language': language, 'context': context}
 
     @rpc
-    def get_labels_by_id_and_language(self, ids, language):
+    def get_labels_by_id_and_language_and_context(self, ids, language, context):
         if type(ids) == list:
             cursor = self.database.labels.find({
                 'id': {'$in': ids},
-                'language': language}, {'_id': 0})
+                'language': language, 'context': context}, {'_id': 0})
             return list(cursor)
 
-        return self.database.labels.find_one({'id': ids, 'language': language}, {'_id': 0})
+        return self.database.labels.find_one({'id': ids, 'language': language, 'context': context}, {'_id': 0})
 
     @rpc
     def get_labels_by_id(self, ids):

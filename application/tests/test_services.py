@@ -229,39 +229,39 @@ def test_get_entity_picture(database):
 def test_add_label(database):
     service = worker_factory(ReferentialService, database=database)
 
-    service.add_label('0', 'fr', 'Label')
-    lab = database.labels.find_one({'id': '0', 'language': 'fr'})
+    service.add_label('0', 'fr', 'ctx', 'Label')
+    lab = database.labels.find_one({'id': '0', 'language': 'fr', 'context': 'ctx'})
     assert lab['label'] == 'Label'
 
-    service.add_label('0', 'fr', 'Label2')
-    lab = database.labels.find_one({'id': '0', 'language': 'fr'})
+    service.add_label('0', 'fr', 'ctx', 'Label2')
+    lab = database.labels.find_one({'id': '0', 'language': 'fr', 'context': 'ctx'})
     assert lab['label'] == 'Label2'
 
 
 def test_delete_label(database):
     service = worker_factory(ReferentialService, database=database)
-    database.labels.insert_one({'id': '0', 'language': 'fr', 'label': 'Label'})
+    database.labels.insert_one({'id': '0', 'language': 'fr', 'context': 'ctx', 'label': 'Label'})
 
-    service.delete_label('0', 'fr')
-    assert not database.labels.find_one({'id': '0', 'language': 'fr'})
+    service.delete_label('0', 'fr', 'ctx')
+    assert not database.labels.find_one({'id': '0', 'language': 'fr', 'context': 'ctx'})
 
 
-def test_get_labels_by_id_and_language(database):
+def test_get_labels_by_id_and_language_and_context(database):
     service = worker_factory(ReferentialService, database=database)
-    database.labels.insert_one({'id': '0', 'language': 'fr', 'label': 'Label'})
-    database.labels.insert_one({'id': '1', 'language': 'fr', 'label': 'Label2'})
+    database.labels.insert_one({'id': '0', 'language': 'fr', 'context': 'ctx', 'label': 'Label'})
+    database.labels.insert_one({'id': '1', 'language': 'fr', 'context': 'ctx', 'label': 'Label2'})
 
-    lab = service.get_labels_by_id_and_language('0', 'fr')
+    lab = service.get_labels_by_id_and_language_and_context('0', 'fr', 'ctx')
     assert lab['label'] == 'Label'
 
-    labs = service.get_labels_by_id_and_language(['0', '1'], 'fr')
+    labs = service.get_labels_by_id_and_language_and_context(['0', '1'], 'fr', 'ctx')
     assert len(labs) == 2
 
 
 def test_get_labels_by_id(database):
     service = worker_factory(ReferentialService, database=database)
-    database.labels.insert_one({'id': '0', 'language': 'fr', 'label': 'Nom'})
-    database.labels.insert_one({'id': '0', 'language': 'en', 'label': 'Label'})
+    database.labels.insert_one({'id': '0', 'language': 'fr', 'context': 'ctx', 'label': 'Nom'})
+    database.labels.insert_one({'id': '0', 'language': 'en', 'context': 'ctx', 'label': 'Label'})
 
     labs = service.get_labels_by_id('0')
     assert len(labs) == 2
