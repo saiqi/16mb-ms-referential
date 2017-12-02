@@ -21,9 +21,34 @@ class ReferentialService(object):
     database = MongoDatabase(result_backend=False)
 
     @staticmethod
-    def _filename(entity_id, context_id, format_id):
-        concat = ''.join([entity_id, context_id, format_id])
+    def _filename(_type, entity_id, context_id, format_id):
+        concat = ''.join([_type, entity_id, context_id, format_id])
         return hashlib.sha1(concat.encode('utf-8')).hexdigest()
+
+    def _add_file_to_gridfs(self, filename, content, is_base64=False):
+        fs = gridfs.GridFS(self.database)
+
+        file = fs.find_one({'filename': filename})
+
+        if file:
+            fs.delete(file._id)
+
+        with tempfile.TemporaryFile() as f:
+            if is_base64 is True:
+                f.write(binascii.hexlify(base64.b64decode(content)))
+            else:
+                f.write(content.encode('utf-8'))
+            f.flush()
+            f.seek(0)
+            fs.put(f, filename=filename)
+
+    def _delete_file_from_gridfs(self, filename):
+        fs = gridfs.GridFS(self.database)
+
+        file = fs.find_one({'filename': filename})
+
+        if file:
+            fs.delete(file._id)
 
     @rpc
     def add_entity(self, id, common_name, provider, type, informations):
@@ -61,32 +86,26 @@ class ReferentialService(object):
 
     @rpc
     def add_picture_to_entity(self, id, context, format, picture_b64):
-        fs = gridfs.GridFS(self.database)
-        filename = self._filename(id, context, format)
+        filename = self._filename('bitmap', id, context, format)
+        self._add_file_to_gridfs(filename, picture_b64, is_base64=True)
+        return {'id': id, 'context': context, 'format': format}
 
-        file = fs.find_one({'filename': filename})
-
-        if file:
-            fs.delete(file._id)
-
-        with tempfile.TemporaryFile() as f:
-            f.write(binascii.hexlify(base64.b64decode(picture_b64)))
-            f.flush()
-            f.seek(0)
-            fs.put(f, filename=filename)
-
+    @rpc
+    def add_logo_to_entity(self, id, context, format, svg_string):
+        filename = self._filename('vectorial', id, context, format)
+        self._add_file_to_gridfs(filename, svg_string)
         return {'id': id, 'context': context, 'format': format}
 
     @rpc
     def delete_picture_from_entity(self, id, context, format):
-        fs = gridfs.GridFS(self.database)
-        filename = self._filename(id, context, format)
+        filename = self._filename('bitmap', id, context, format)
+        self._delete_file_from_gridfs(filename)
+        return {'id': id, 'context': context, 'format': format}
 
-        file = fs.find_one({'filename': filename})
-
-        if file:
-            fs.delete(file._id)
-
+    @rpc
+    def delete_logo_from_entity(self, id, context, format):
+        filename = self._filename('vectorial', id, context, format)
+        self._delete_file_from_gridfs(filename)
         return {'id': id, 'context': context, 'format': format}
 
     @rpc
@@ -102,12 +121,24 @@ class ReferentialService(object):
     @rpc
     def get_entity_picture(self, id, context, format):
         fs = gridfs.GridFS(self.database)
-        filename = self._filename(id, context, format)
+        filename = self._filename('bitmap', id, context, format)
 
         file = fs.find_one({'filename': filename})
 
         if file:
             return base64.b64encode(binascii.unhexlify(file.read())).decode('utf-8')
+
+        return None
+
+    @rpc
+    def get_entity_logo(self, id, context, format):
+        fs = gridfs.GridFS(self.database)
+        filename = self._filename('vectorial', id, context, format)
+
+        file = fs.find_one({'filename': filename})
+
+        if file:
+            return file.read().decode('utf-8')
 
         return None
 
