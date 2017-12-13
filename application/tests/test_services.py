@@ -37,6 +37,18 @@ def test_add_entity(database):
     assert len(list(result)) == 2
 
 
+def test_add_informations_to_entity(database):
+    service = worker_factory(ReferentialService, database=database)
+    database.entities.insert_one({'id': '0', 'common_name': 'The Hangover', 'provider': 'me',
+                                  'type': 'movie', 'informations': {'starring': 'Bradley Cooper'}})
+
+    service.add_informations_to_entity('0', {'release_date': '2012-11-15'})
+
+    result = database.entities.find_one({'id': '0'})
+    assert result['informations']['release_date'] == '2012-11-15'
+    assert result['informations']['starring'] == 'Bradley Cooper'
+
+
 def test_add_translation(database):
     service = worker_factory(ReferentialService, database=database)
 

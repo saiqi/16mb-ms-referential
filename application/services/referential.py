@@ -71,6 +71,18 @@ class ReferentialService(object):
         return {'id': id}
 
     @rpc
+    def add_informations_to_entity(self, id, informations):
+        update_doc = dict(('informations.{}'.format(k), v)
+                          for k, v in informations.items())
+
+        self.database.entities.update_one(
+            {'id': id},
+            {'$set': update_doc}
+        )
+
+        return {'id': id}
+
+    @rpc
     def add_translation_to_entity(self, id, language, translation):
         self.database.entities.update_one(
             {'id': id},
