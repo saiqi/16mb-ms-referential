@@ -86,13 +86,13 @@ class ReferentialService(object):
     def add_translation_to_entity(self, id, language, translation):
         self.database.entities.update_one(
             {'id': id},
-            {'$addToSet': {'internationalization': {'language': language, 'translation': translation}}})
+            {'$set': {'internationalization': {language: translation}}})
 
         return {'id': id, 'language': language}
 
     @rpc
     def delete_translation_from_entity(self, id, language):
-        self.database.entities.update_one({'id': id}, {'$pull': {'internationalization': {'language': language}}})
+        self.database.entities.update_one({'id': id}, {'$unset': {'internationalization': {language: ''}}})
 
         return {'id': id, 'language': language}
 

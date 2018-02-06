@@ -58,7 +58,7 @@ def test_add_translation(database):
 
     service.add_translation_to_entity('0', 'fr', 'La gueule de bois')
     result = database.entities.find_one({'id': '0'})
-    assert result['internationalization'][0]['translation'] == 'La gueule de bois'
+    assert result['internationalization']['fr'] == 'La gueule de bois'
 
 
 def test_delete_translation(database):
@@ -66,12 +66,12 @@ def test_delete_translation(database):
 
     database.entities.insert_one({'id': '0', 'common_name': 'The Hangover', 'provider': 'me',
                                   'type': 'movie', 'informations': {'starring': 'Bradley Cooper'},
-                                  'internationalization': [{'language': 'fr', 'translation': 'La gueule de bois'}]})
+                                  'internationalization': {'fr': 'La gueule de bois'}})
     database.entities.create_index('id')
 
     service.delete_translation_from_entity('0', 'fr')
     result = database.entities.find_one({'id': '0'})
-    assert len(result['internationalization']) == 0
+    assert 'internationalization' not in result
 
 
 def test_get_entity_by_id(database):
