@@ -267,28 +267,34 @@ class ReferentialService(object):
         return bson.json_util.dumps(result)
 
     @rpc
-    def search_entity(self, name, type, provider):
-        cursor = self.database.entities.find({
-                '$text': {'$search': name},
-                'type': type,
-                'provider': provider
-            },
-            {'_id': 0})
+    def search_entity(self, name, type=None, provider=None):
+        query = {'$text': {'$search': name}}
+        if type is not None:
+            query['type'] = type
+        if provider is not None:
+            query['provider'] = provider
+        cursor = self.database.entities.find(query, {'_id': 0})
         return bson.json_util.dumps(list(cursor))
 
     @rpc
-    def search_event(self, name, date, type, provider):
+    def search_event(self, name, date, type=None, provider=None):
         start_date = dateutil.parser.parse(date)
         end_date = start_date + datetime.timedelta(days=1)
-        cursor = self.database.events.find({
+
+        query = {
             'date': {
                 '$gte': start_date,
                 '$lt': end_date
             },
-            'type': type,
-            'provider': provider,
             '$text': {
                 '$search': name
             }
-        }, {'entities': 0, '_id': 0})
+        }
+
+        if type is not None:
+            query['type'] = type
+        if provider is not None:
+            query['provider'] = provider
+
+        cursor = self.database.events.find(query, {'_id': 0})
         return bson.json_util.dumps(list(cursor))

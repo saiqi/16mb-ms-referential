@@ -465,6 +465,10 @@ def test_search_entity(database):
     res = bson.json_util.loads(service.search_entity('unknown', 'movie', 'provider'))
     assert len(res) == 0
 
+    res = bson.json_util.loads(service.search_entity('hangover'))
+    assert len(res) == 1
+    assert res[0]['common_name'] == 'The Hangover'
+
 
 def test_search_event(database):
     service = worker_factory(ReferentialService, database=database)
@@ -500,5 +504,9 @@ def test_search_event(database):
     database.events.create_index([('common_name', TEXT)], default_language='english')
 
     res = bson.json_util.loads(service.search_event('name', '2017-09-25', 'new movie', 'provider'))
+    assert len(res) == 1
+    assert res[0]['common_name'] == 'Name'
+
+    res = bson.json_util.loads(service.search_event('name', '2017-09-25'))
     assert len(res) == 1
     assert res[0]['common_name'] == 'Name'
