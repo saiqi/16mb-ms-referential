@@ -3,6 +3,8 @@ import binascii
 import tempfile
 import base64
 import datetime
+import itertools
+import re
 from nameko.rpc import rpc
 from nameko_mongodb.database import MongoDatabase
 from pymongo import TEXT, ASCENDING, DESCENDING
@@ -49,6 +51,14 @@ class ReferentialService(object):
 
         if file:
             fs.delete(file._id)
+
+    @staticmethod
+    def _make_ngrams(word, min_size=3, prefix_only=False):
+        length = len(word)
+        size_range = range(min_size, max(min_size, length) + 1)
+        if prefix_only:
+            return [word[0: size] for size in size_range]
+        return list(set(word[i: i+size] for size in size_range for i in range(0, max(0, length - size) + 1)))
 
     @rpc
     def add_entity(self, id, common_name, provider, type, informations):
@@ -179,6 +189,46 @@ class ReferentialService(object):
         return {'id': id, 'date': date, 'provider': provider, 'type': type, 'common_name': common_name}
 
     @rpc
+    def update_ngrams_search_collection(self):
+        self.database.search.create_index([
+            ('ngrams', TEXT), ('prefix_ngrams', TEXT), ('type', ASCENDING), ('provider', ASCENDING)
+        ], weights={'ngrams': 100, 'prefix_ngrams': 200})
+
+        entities = self.database.entities.find({},{
+            'id': 1,
+            'common_name': 1,
+            'type': 1,
+            'provider': 1,
+            '_id': 0})
+        events = self.database.events.find({},{
+            'id': 1,
+            'common_name': 1,
+            'type': 1,
+            'provider': 1,
+            '_id': 0})
+        for ref_entry in itertools.chain(entities, events):
+            words = ref_entry['common_name'].lower().split(' ')
+            filtered_words = list(filter(lambda w: re.match(r'[a-z0-9]+', w) is not None, words))
+
+            ngrams_list = map(self._make_ngrams, filtered_words)
+            ngrams = ' '.join(itertools.chain(*ngrams_list))
+
+            pref_ngrams_list = map(lambda w: self._make_ngrams(w, prefix_only=True), filtered_words)
+            pref_ngrams = ' '.join(itertools.chain(*pref_ngrams_list))
+
+            self.database.search.update_one({'id': ref_entry['id']}, {
+                '$set':{
+                    'id': ref_entry['id'],
+                    'common_name': ref_entry['common_name'],
+                    'ngrams': ngrams,
+                    'prefix_ngrams': pref_ngrams,
+                    'type': ref_entry['type'],
+                    'provider': ref_entry['provider']
+                }
+            }, upsert=True)
+        return True
+
+    @rpc
     def get_event_by_id(self, id):
         event = self.database.events.find_one({'id': id}, {'_id': 0})
         return bson.json_util.dumps(event)
@@ -297,4 +347,12 @@ class ReferentialService(object):
             query['provider'] = provider
 
         cursor = self.database.events.find(query, {'_id': 0})
+        return bson.json_util.dumps(list(cursor))
+
+    @rpc
+    def fuzzy_search(self, query, type, provider):
+        cursor = self.database.search.find({
+            '$text': {'$search': query},
+            'type': type,
+            'provider': provider}, {'_id': 0})
         return bson.json_util.dumps(list(cursor))

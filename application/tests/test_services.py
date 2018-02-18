@@ -4,7 +4,7 @@ import hashlib
 import binascii
 import tempfile
 import base64
-from pymongo import MongoClient, TEXT
+from pymongo import MongoClient, TEXT, ASCENDING
 from nameko.testing.services import worker_factory
 import bson.json_util
 import gridfs
@@ -337,6 +337,58 @@ def test_get_labels_by_id(database):
     assert len(labs) == 2
 
 
+def test_update_ngrams_search_collection(database):
+    service = worker_factory(ReferentialService, database=database)
+    datetime.datetime(2017, 9, 25, 8, 0)
+    database.events.insert_many([
+        {
+            'id': 'ev0',
+            'date': datetime.datetime(2017, 9, 25, 8, 0),
+            'provider': 'provider',
+            'type': 'new movie',
+            'common_name': 'Name',
+            'content': 'New Movie',
+            'entities': [{'common_name': 'Bradley', 'id': 'b1'}]
+        },
+        {
+            'id': 'ev1',
+            'date': datetime.datetime(2017, 9, 26, 8, 0),
+            'provider': 'provider',
+            'type': 'new movie',
+            'common_name': 'Other',
+            'content': 'New Movie',
+            'entities': [{'common_name': 'Bradley', 'id': 'b1'}]
+        },
+        {
+            'id': 'ev2',
+            'date': datetime.datetime(2017, 9, 15, 8, 0),
+            'provider': 'other_provider',
+            'type': 'new movie',
+            'common_name': 'Name',
+            'content': 'New Movie',
+            'entities': [{'common_name': 'Johnny', 'id': 'j1'}]
+        }
+    ])
+
+    database.entities.insert_one({'id': 'en0', 'common_name': 'The Hangover', 'provider': 'provider',
+                                  'type': 'movie', 'informations': {'starring': 'Bradley Cooper'},
+                                  'internationalization': [{'language': 'fr', 'translation': 'la gueule de bois'}]})
+    res = service.update_ngrams_search_collection()
+    assert res
+
+    search_doc = database.search.find_one({'id': 'en0'})
+    assert 'ngrams' in search_doc
+    assert 'prefix_ngrams' in search_doc
+
+    search_doc = database.search.find_one({'id': 'ev0'})
+    assert 'ngrams' in search_doc
+    assert 'prefix_ngrams' in search_doc
+    for word in ('name', 'nam', 'ame'):
+        assert word in search_doc['ngrams']
+    for word in ('nam', 'name'):
+        assert word in search_doc['prefix_ngrams']
+
+
 def test_get_entity_or_event(database):
     service = worker_factory(ReferentialService, database=database)
     datetime.datetime(2017, 9, 25, 8, 0)
@@ -510,3 +562,26 @@ def test_search_event(database):
     res = bson.json_util.loads(service.search_event('name', '2017-09-25'))
     assert len(res) == 1
     assert res[0]['common_name'] == 'Name'
+
+
+def test_fuzzy_search(database):
+    service = worker_factory(ReferentialService, database=database)
+    database.search.insert_one(
+        {
+            'id': '0',
+            'common_name': 'name',
+            'ngrams': 'name nam ame',
+            'prefix_ngrams': 'name nam',
+            'type': 'type',
+            'provider': 'provider'
+        })
+    database.search.create_index([
+        ('ngrams', TEXT), ('prefix_ngrams', TEXT), ('type', ASCENDING), ('provider', ASCENDING)
+    ], weights={'ngrams': 100, 'prefix_ngrams': 200})
+
+    res = bson.json_util.loads(service.fuzzy_search('nam', 'type', 'provider'))
+    assert len(res) == 1
+    assert res[0]['id'] == '0'
+
+    res = bson.json_util.loads(service.fuzzy_search('nam', 'other', 'provider'))
+    assert len(res) == 0
