@@ -52,14 +52,6 @@ class ReferentialService(object):
         if file:
             fs.delete(file._id)
 
-    @staticmethod
-    def _make_ngrams(word, min_size=3, prefix_only=False):
-        length = len(word)
-        size_range = range(min_size, max(min_size, length) + 1)
-        if prefix_only:
-            return [word[0: size] for size in size_range]
-        return list(set(word[i: i+size] for size in size_range for i in range(0, max(0, length - size) + 1)))
-
     @rpc
     def add_entity(self, id, common_name, provider, type, informations):
         self.database.entities.create_index('id')
@@ -188,6 +180,18 @@ class ReferentialService(object):
 
         return {'id': id, 'date': date, 'provider': provider, 'type': type, 'common_name': common_name}
 
+    @staticmethod
+    def _make_ngrams(words, min_size=3, prefix_only=False):
+        ngrams = []
+        for word in words.lower().split(' '):
+            if re.match(r'[a-z0-9]+', word):
+                length = len(word)
+                size_range = range(min_size, max(min_size, length) + 1)
+                if prefix_only:
+                    ngrams.extend(word[0: size] for size in size_range)
+                ngrams.extend(word[i: i+size] for size in size_range for i in range(0, max(0, length - size) + 1))
+        return ' '.join(ngrams)
+
     @rpc
     def update_ngrams_search_collection(self):
         self.database.search.create_index([
@@ -207,14 +211,8 @@ class ReferentialService(object):
             'provider': 1,
             '_id': 0})
         for ref_entry in itertools.chain(entities, events):
-            words = ref_entry['common_name'].lower().split(' ')
-            filtered_words = list(filter(lambda w: re.match(r'[a-z0-9]+', w) is not None, words))
-
-            ngrams_list = map(self._make_ngrams, filtered_words)
-            ngrams = ' '.join(itertools.chain(*ngrams_list))
-
-            pref_ngrams_list = map(lambda w: self._make_ngrams(w, prefix_only=True), filtered_words)
-            pref_ngrams = ' '.join(itertools.chain(*pref_ngrams_list))
+            ngrams = self._make_ngrams(ref_entry['common_name'])
+            pref_ngrams = self._make_ngrams(ref_entry['common_name'], prefix_only=True)
 
             self.database.search.update_one({'id': ref_entry['id']}, {
                 '$set':{
@@ -351,8 +349,12 @@ class ReferentialService(object):
 
     @rpc
     def fuzzy_search(self, query, type, provider):
-        cursor = self.database.search.find({
-            '$text': {'$search': query},
-            'type': type,
-            'provider': provider}, {'_id': 0})
+        cursor = self.database.search.find(
+            {
+                '$text': {'$search': self._make_ngrams(query)},
+                'type': type,
+                'provider': provider
+            },
+            {'id': 1, 'common_name': 1, 'score': {'$meta': 'textScore'}, '_id': 0}
+            ).sort([('score', {'$meta': 'textScore'})])
         return bson.json_util.dumps(list(cursor))
