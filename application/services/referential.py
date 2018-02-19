@@ -4,7 +4,7 @@ import tempfile
 import base64
 import datetime
 import itertools
-import re
+import string
 from nameko.rpc import rpc
 from nameko_mongodb.database import MongoDatabase
 from pymongo import TEXT, ASCENDING, DESCENDING
@@ -183,13 +183,14 @@ class ReferentialService(object):
     @staticmethod
     def _make_ngrams(words, min_size=3, prefix_only=False):
         ngrams = []
+        table = str.maketrans({key: None for key in string.punctuation})
         for word in words.lower().split(' '):
-            if re.match(r'[a-z0-9]+', word):
-                length = len(word)
-                size_range = range(min_size, max(min_size, length) + 1)
-                if prefix_only:
-                    ngrams.extend(word[0: size] for size in size_range)
-                ngrams.extend(word[i: i+size] for size in size_range for i in range(0, max(0, length - size) + 1))
+            clean_word = word.translate(table)
+            length = len(clean_word)
+            size_range = range(min_size, max(min_size, length) + 1)
+            if prefix_only:
+                ngrams.extend(clean_word[0: size] for size in size_range)
+            ngrams.extend(clean_word[i: i+size] for size in size_range for i in range(0, max(0, length - size) + 1))
         return ' '.join(ngrams)
 
     @rpc
