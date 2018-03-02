@@ -86,9 +86,19 @@ class ReferentialService(object):
 
     @rpc
     def add_translation_to_entity(self, id, language, translation):
+        entity = self.database.entities.find_one({'id': id}, {'id': 1, 'internationalization': 1})
+
+        if not entity:
+            raise ReferentialServiceError('No entity found with id {}'.format(id))
+
+        if 'internationalization' not in entity:
+            entity['internationalization'] = {language: translation}
+        else:
+            entity['internationalization'][language] = translation
+
         self.database.entities.update_one(
             {'id': id},
-            {'$set': {'internationalization': {language: translation}}})
+            {'$set': {'internationalization': entity['internationalization']}})
 
         return {'id': id, 'language': language}
 

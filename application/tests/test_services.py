@@ -60,6 +60,12 @@ def test_add_translation(database):
     result = database.entities.find_one({'id': '0'})
     assert result['internationalization']['fr'] == 'La gueule de bois'
 
+    service.add_translation_to_entity('0', 'en', 'The hangover')
+    result = database.entities.find_one({'id': '0'})
+    assert 'fr' in result['internationalization']
+    assert result['internationalization']['en'] == 'The hangover'
+    assert result['internationalization']['fr'] == 'La gueule de bois'
+
 
 def test_delete_translation(database):
     service = worker_factory(ReferentialService, database=database)
