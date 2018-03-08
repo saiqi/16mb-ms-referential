@@ -395,6 +395,43 @@ def test_update_ngrams_search_collection(database):
         assert word in search_doc['prefix_ngrams']
 
 
+def test_update_entry_ngrams(database):
+    service = worker_factory(ReferentialService, database=database)
+    datetime.datetime(2017, 9, 25, 8, 0)
+    database.events.insert_many([
+        {
+            'id': 'ev0',
+            'date': datetime.datetime(2017, 9, 25, 8, 0),
+            'provider': 'provider',
+            'type': 'new movie',
+            'common_name': 'Name',
+            'content': 'New Movie',
+            'entities': [{'common_name': 'Bradley', 'id': 'b1'}]
+        },
+        {
+            'id': 'ev1',
+            'date': datetime.datetime(2017, 9, 26, 8, 0),
+            'provider': 'provider',
+            'type': 'new movie',
+            'common_name': 'Other',
+            'content': 'New Movie',
+            'entities': [{'common_name': 'Bradley', 'id': 'b1'}]
+        }
+    ])
+
+    database.entities.insert_one({'id': 'en0', 'common_name': 'The Hangover', 'provider': 'provider',
+                                  'type': 'movie', 'informations': {'starring': 'Bradley Cooper'},
+                                  'internationalization': [{'language': 'fr', 'translation': 'la gueule de bois'}]})
+    service.update_entry_ngrams('en0')
+    assert database.search.find_one({'id': 'en0'})
+
+    service.update_entry_ngrams('ev1')
+    assert database.search.find_one({'id': 'ev1'})
+
+    with pytest.raises(ReferentialServiceError):
+        service.update_entry_ngrams('unknwon')
+
+
 def test_get_entity_or_event(database):
     service = worker_factory(ReferentialService, database=database)
     datetime.datetime(2017, 9, 25, 8, 0)

@@ -238,6 +238,29 @@ class ReferentialService(object):
         return True
 
     @rpc
+    def update_entry_ngrams(self, entry_id):
+        project = {'id': 1,'common_name': 1,'type': 1,'provider': 1,'_id': 0}
+        entry = self.database.entities.find_one({'id': entry_id}, project)
+        if not entry:
+            entry = self.database.events.find_one({'id': entry_id}, project)
+            if not entry:
+                raise ReferentialServiceError('No entry with {} found in referential'.format(entry_id))
+        ngrams = self._make_ngrams(entry['common_name'])
+        pref_ngrams = self._make_ngrams(entry['common_name'], prefix_only=True)
+
+        self.database.search.update_one({'id': entry['id']}, {
+            '$set':{
+                    'id': entry['id'],
+                    'common_name': entry['common_name'],
+                    'ngrams': ngrams,
+                    'prefix_ngrams': pref_ngrams,
+                    'type': entry['type'],
+                    'provider': entry['provider']
+                }
+        }, upsert=True)
+        return entry_id
+
+    @rpc
     def get_event_by_id(self, id):
         event = self.database.events.find_one({'id': id}, {'_id': 0})
         return bson.json_util.dumps(event)
