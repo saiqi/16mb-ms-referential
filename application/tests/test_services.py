@@ -512,5 +512,9 @@ def test_fuzzy_search(database):
     assert len(res) == 1
     assert res[0]['id'] == '0'
 
+    res = bson.json_util.loads(service.fuzzy_search('nam'))
+    assert len(res) == 1
+    assert res[0]['id'] == '0'
+
     res = bson.json_util.loads(service.fuzzy_search('nam', 'other', 'provider'))
     assert len(res) == 0

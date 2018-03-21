@@ -343,13 +343,18 @@ class ReferentialService(object):
         return bson.json_util.dumps(list(cursor))
 
     @rpc
-    def fuzzy_search(self, query, type, provider):
+    def fuzzy_search(self, query, type=None, provider=None):
+        query = {
+            '$text': {'$search': self._make_ngrams(query)},
+        }
+
+        if type is not None:
+            query['type'] = type
+        if provider is not None:
+            query['provider'] = provider
+
         cursor = self.database.search.find(
-            {
-                '$text': {'$search': self._make_ngrams(query)},
-                'type': type,
-                'provider': provider
-            },
+            query,
             {'id': 1, 'common_name': 1, 'score': {'$meta': 'textScore'}, '_id': 0}
             ).sort([('score', {'$meta': 'textScore'})])
         return bson.json_util.dumps(list(cursor))
