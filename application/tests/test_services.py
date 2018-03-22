@@ -84,10 +84,11 @@ def test_get_entity_by_id(database):
     service = worker_factory(ReferentialService, database=database)
 
     database.entities.insert_one({'id': '0', 'common_name': 'The Hangover', 'provider': 'me',
-                                  'type': 'movie', 'informations': {'starring': 'Bradley Cooper'}})
+                                  'type': 'movie', 'informations': {'starring': 'Bradley Cooper'},
+                                  'allowed_users': ['admin']})
     database.entities.create_index('id')
 
-    result = bson.json_util.loads(service.get_entity_by_id('0'))
+    result = bson.json_util.loads(service.get_entity_by_id('0', 'admin'))
     assert result['common_name'] == 'The Hangover'
 
 
@@ -95,18 +96,22 @@ def test_get_entity_by_name(database):
     service = worker_factory(ReferentialService, database=database)
     database.entities.insert_one({'id': '0', 'common_name': 'The Hangover', 'provider': 'me',
                                   'type': 'movie', 'informations': {'starring': 'Bradley Cooper'},
-                                  'internationalization': [{'language': 'fr', 'translation': 'la gueule de bois'}]})
+                                  'internationalization': [{'language': 'fr', 'translation': 'la gueule de bois'}],
+                                  'allowed_users': ['admin']})
     database.entities.create_index('id')
     database.entities.create_index([('common_name', TEXT),
                                     ('internationalization.translation', TEXT)],
                                    default_language='english')
-    result = bson.json_util.loads(service.get_entities_by_name('hangover'))
+    result = bson.json_util.loads(service.get_entities_by_name('hangover', 'admin'))
     assert result[0]['id'] == '0'
 
-    result = bson.json_util.loads(service.get_entities_by_name('gueule'))
+    result = bson.json_util.loads(service.get_entities_by_name('gueule', 'admin'))
     assert result[0]['id'] == '0'
 
-    result = bson.json_util.loads(service.get_entities_by_name('nothing comparable'))
+    result = bson.json_util.loads(service.get_entities_by_name('nothing comparable', 'admin'))
+    assert len(result) == 0
+
+    result = bson.json_util.loads(service.get_entities_by_name('hangover', 'other'))
     assert len(result) == 0
 
 
@@ -128,9 +133,10 @@ def test_get_event_by_id(database):
         'type': 'type',
         'common_name': 'Name',
         'content': 'New Movie',
-        'entities': [{'common_name': 'Bradley', 'id': 'b1'}]
+        'entities': [{'common_name': 'Bradley', 'id': 'b1'}],
+        'allowed_users': ['admin']
     })
-    event = bson.json_util.loads(service.get_event_by_id('0'))
+    event = bson.json_util.loads(service.get_event_by_id('0', 'admin'))
     assert event['id'] == '0'
 
 
@@ -144,7 +150,8 @@ def test_get_events_by_entity_id(database):
             'type': 'type',
             'common_name': 'Name',
             'content': 'New Movie',
-            'entities': [{'common_name': 'Bradley', 'id': 'b1'}]
+            'entities': [{'common_name': 'Bradley', 'id': 'b1'}],
+            'allowed_users': ['admin']
         },
         {
             'id': '1',
@@ -153,7 +160,8 @@ def test_get_events_by_entity_id(database):
             'type': 'type',
             'common_name': 'Name',
             'content': 'New Movie',
-            'entities': [{'common_name': 'Bradley', 'id': 'b1'}]
+            'entities': [{'common_name': 'Bradley', 'id': 'b1'}],
+            'allowed_users': ['admin']
         },
         {
             'id': '2',
@@ -162,10 +170,11 @@ def test_get_events_by_entity_id(database):
             'type': 'type',
             'common_name': 'Name',
             'content': 'New Movie',
-            'entities': [{'common_name': 'Johnny', 'id': 'j1'}]
+            'entities': [{'common_name': 'Johnny', 'id': 'j1'}],
+            'allowed_users': ['admin']
         }
     ])
-    result = bson.json_util.loads(service.get_events_by_entity_id('b1'))
+    result = bson.json_util.loads(service.get_events_by_entity_id('b1', 'admin'))
     assert len(result) == 2
 
 
@@ -179,9 +188,10 @@ def test_get_events_by_name(database):
         'type': 'type',
         'common_name': 'Name',
         'content': 'New Movie',
-        'entities': [{'common_name': 'Bradley', 'id': 'b1'}]
+        'entities': [{'common_name': 'Bradley', 'id': 'b1'}],
+        'allowed_users': ['admin']
     })
-    res = bson.json_util.loads(service.get_events_by_name('name'))
+    res = bson.json_util.loads(service.get_events_by_name('name', 'admin'))
     assert len(res) == 1
     assert res[0]['id'] == '0'
 
@@ -354,7 +364,8 @@ def test_update_ngrams_search_collection(database):
             'type': 'new movie',
             'common_name': 'Name',
             'content': 'New Movie',
-            'entities': [{'common_name': 'Bradley', 'id': 'b1'}]
+            'entities': [{'common_name': 'Bradley', 'id': 'b1'}],
+            'allowed_users': ['admin']
         },
         {
             'id': 'ev1',
@@ -363,7 +374,8 @@ def test_update_ngrams_search_collection(database):
             'type': 'new movie',
             'common_name': 'Other',
             'content': 'New Movie',
-            'entities': [{'common_name': 'Bradley', 'id': 'b1'}]
+            'entities': [{'common_name': 'Bradley', 'id': 'b1'}],
+            'allowed_users': ['admin']
         },
         {
             'id': 'ev2',
@@ -372,13 +384,15 @@ def test_update_ngrams_search_collection(database):
             'type': 'new movie',
             'common_name': 'Name',
             'content': 'New Movie',
-            'entities': [{'common_name': 'Johnny', 'id': 'j1'}]
+            'entities': [{'common_name': 'Johnny', 'id': 'j1'}],
+            'allowed_users': ['admin']
         }
     ])
 
     database.entities.insert_one({'id': 'en0', 'common_name': 'The Hangover', 'provider': 'provider',
                                   'type': 'movie', 'informations': {'starring': 'Bradley Cooper'},
-                                  'internationalization': [{'language': 'fr', 'translation': 'la gueule de bois'}]})
+                                  'internationalization': [{'language': 'fr', 'translation': 'la gueule de bois'}],
+                                  'allowed_users': ['admin']})
     res = service.update_ngrams_search_collection()
     assert res
 
@@ -406,7 +420,8 @@ def test_update_entry_ngrams(database):
             'type': 'new movie',
             'common_name': 'Name',
             'content': 'New Movie',
-            'entities': [{'common_name': 'Bradley', 'id': 'b1'}]
+            'entities': [{'common_name': 'Bradley', 'id': 'b1'}],
+            'allowed_users': ['admin']
         },
         {
             'id': 'ev1',
@@ -415,13 +430,15 @@ def test_update_entry_ngrams(database):
             'type': 'new movie',
             'common_name': 'Other',
             'content': 'New Movie',
-            'entities': [{'common_name': 'Bradley', 'id': 'b1'}]
+            'entities': [{'common_name': 'Bradley', 'id': 'b1'}],
+            'allowed_users': ['admin']
         }
     ])
 
     database.entities.insert_one({'id': 'en0', 'common_name': 'The Hangover', 'provider': 'provider',
                                   'type': 'movie', 'informations': {'starring': 'Bradley Cooper'},
-                                  'internationalization': [{'language': 'fr', 'translation': 'la gueule de bois'}]})
+                                  'internationalization': [{'language': 'fr', 'translation': 'la gueule de bois'}],
+                                  'allowed_users': ['admin']})
     service.update_entry_ngrams('en0')
     assert database.search.find_one({'id': 'en0'})
 
@@ -436,17 +453,18 @@ def test_search_entity(database):
     service = worker_factory(ReferentialService, database=database)
     database.entities.insert_one({'id': '0', 'common_name': 'The Hangover', 'provider': 'provider',
                                   'type': 'movie', 'informations': {'starring': 'Bradley Cooper'},
-                                  'internationalization': [{'language': 'fr', 'translation': 'la gueule de bois'}]})
+                                  'internationalization': [{'language': 'fr', 'translation': 'la gueule de bois'}],
+                                  'allowed_users': ['admin']})
     database.entities.create_index([('common_name', TEXT)], default_language='english')
 
-    res = bson.json_util.loads(service.search_entity('hangover', 'movie', 'provider'))
+    res = bson.json_util.loads(service.search_entity('hangover', 'admin', 'movie', 'provider'))
     assert len(res) == 1
     assert res[0]['common_name'] == 'The Hangover'
 
-    res = bson.json_util.loads(service.search_entity('unknown', 'movie', 'provider'))
+    res = bson.json_util.loads(service.search_entity('unknown', 'admin', 'movie', 'provider'))
     assert len(res) == 0
 
-    res = bson.json_util.loads(service.search_entity('hangover'))
+    res = bson.json_util.loads(service.search_entity('hangover', 'admin'))
     assert len(res) == 1
     assert res[0]['common_name'] == 'The Hangover'
 
@@ -461,7 +479,8 @@ def test_search_event(database):
             'type': 'new movie',
             'common_name': 'Name',
             'content': 'New Movie',
-            'entities': [{'common_name': 'Bradley', 'id': 'b1'}]
+            'entities': [{'common_name': 'Bradley', 'id': 'b1'}],
+            'allowed_users': ['admin']
         },
         {
             'id': '1',
@@ -470,7 +489,8 @@ def test_search_event(database):
             'type': 'new movie',
             'common_name': 'Other',
             'content': 'New Movie',
-            'entities': [{'common_name': 'Bradley', 'id': 'b1'}]
+            'entities': [{'common_name': 'Bradley', 'id': 'b1'}],
+            'allowed_users': ['admin']
         },
         {
             'id': '2',
@@ -479,16 +499,17 @@ def test_search_event(database):
             'type': 'new movie',
             'common_name': 'Name',
             'content': 'New Movie',
-            'entities': [{'common_name': 'Johnny', 'id': 'j1'}]
+            'entities': [{'common_name': 'Johnny', 'id': 'j1'}],
+            'allowed_users': ['admin']
         }
     ])
     database.events.create_index([('common_name', TEXT)], default_language='english')
 
-    res = bson.json_util.loads(service.search_event('name', '2017-09-25', 'new movie', 'provider'))
+    res = bson.json_util.loads(service.search_event('name', '2017-09-25', 'admin', 'new movie', 'provider'))
     assert len(res) == 1
     assert res[0]['common_name'] == 'Name'
 
-    res = bson.json_util.loads(service.search_event('name', '2017-09-25'))
+    res = bson.json_util.loads(service.search_event('name', '2017-09-25', 'admin'))
     assert len(res) == 1
     assert res[0]['common_name'] == 'Name'
 
@@ -502,19 +523,20 @@ def test_fuzzy_search(database):
             'ngrams': 'name nam ame',
             'prefix_ngrams': 'name nam',
             'type': 'type',
-            'provider': 'provider'
+            'provider': 'provider',
+            'allowed_users': ['admin']
         })
     database.search.create_index([
         ('ngrams', TEXT), ('prefix_ngrams', TEXT), ('type', ASCENDING), ('provider', ASCENDING)
     ], weights={'ngrams': 100, 'prefix_ngrams': 200})
 
-    res = bson.json_util.loads(service.fuzzy_search('nam', 'type', 'provider'))
+    res = bson.json_util.loads(service.fuzzy_search('nam', 'admin', 'type', 'provider'))
     assert len(res) == 1
     assert res[0]['id'] == '0'
 
-    res = bson.json_util.loads(service.fuzzy_search('nam'))
+    res = bson.json_util.loads(service.fuzzy_search('nam', 'admin'))
     assert len(res) == 1
     assert res[0]['id'] == '0'
 
-    res = bson.json_util.loads(service.fuzzy_search('nam', 'other', 'provider'))
+    res = bson.json_util.loads(service.fuzzy_search('nam', 'admin', 'other', 'provider'))
     assert len(res) == 0

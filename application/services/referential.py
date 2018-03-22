@@ -6,6 +6,7 @@ import datetime
 import itertools
 import string
 from nameko.rpc import rpc
+from nameko.events import event_handler
 from nameko_mongodb.database import MongoDatabase
 from pymongo import TEXT, ASCENDING, DESCENDING
 import gridfs
@@ -21,6 +22,35 @@ class ReferentialService(object):
     name = 'referential'
 
     database = MongoDatabase(result_backend=False)
+
+    def _write_subscription_in_collection(self, user, provider, collection):
+        self.database[collection].create_index([('id', ASCENDING), ('allowed_users', ASCENDING)])
+        self.database[collection].create_index('provider')
+        self.database[collection].create_index([('common_name', TEXT), 
+            ('allowed_users', ASCENDING)], default_language='english')
+        self.database[collection].update_many({'provider': provider},
+            {'$addToSet':{'allowed_users': user}})
+
+    def _add_provider_subscription(self, user, provider):
+        for collection in ('entities', 'events', 'search'):
+            self._write_subscription_in_collection(user, provider, collection)
+
+    def _add_picture_subscription(self, user, context, _format):
+        pass
+
+    @event_handler('subscription_manager', 'user_sub')
+    def handle_suscription(self, payload):
+        user = payload['user']
+        if 'referential' in payload['subscription']:
+            referential = payload['subscription']['referential']
+            if 'providers' in referential:
+                for provider in referential['providers']:
+                    self._add_provider_subscription(user, provider)
+            if 'pictures' in referential:
+                for picture in referential['pictures']:
+                    self._add_picture_subscription(user, picture['context'], picture['format'])
+            self.database.subscriptions.update_one({'user': user},
+                {'$set': {'subscription': referential}}, upsert=True)
 
     @staticmethod
     def _filename(_type, entity_id, context_id, format_id):
@@ -52,6 +82,10 @@ class ReferentialService(object):
         if file:
             fs.delete(file._id)
 
+    def _get_allowed_users(self, provider):
+        sub = self.database.subscriptions.find({'subscription.providers': provider}, {'user': 1})
+        return [r['user'] for r in sub]
+
     @rpc
     def add_entity(self, id, common_name, provider, type, informations):
         self.database.entities.create_index('id')
@@ -66,7 +100,8 @@ class ReferentialService(object):
                     'common_name': common_name,
                     'provider': provider,
                     'informations': informations,
-                    'type': type
+                    'type': type,
+                    'allowed_users': self._get_allowed_users(provider)
                 }
             }, upsert=True)
 
@@ -133,13 +168,15 @@ class ReferentialService(object):
         return {'id': id, 'context': context, 'format': format}
 
     @rpc
-    def get_entity_by_id(self, id):
-        entity = self.database.entities.find_one({'id': id}, {'_id': 0})
+    def get_entity_by_id(self, id, user):
+        entity = self.database.entities.find_one({'id': id, 'allowed_users': user}, 
+            {'_id': 0})
         return bson.json_util.dumps(entity)
 
     @rpc
-    def get_entities_by_name(self, name):
-        cursor = self.database.entities.find({'$text': {'$search': name}}, {'_id': 0})
+    def get_entities_by_name(self, name, user):
+        cursor = self.database.entities.find({'$text': {'$search': name}, 'allowed_users':user}, 
+            {'_id': 0})
         return bson.json_util.dumps(list(cursor))
 
     @rpc
@@ -183,7 +220,8 @@ class ReferentialService(object):
                     'type': type,
                     'common_name': common_name,
                     'content': content,
-                    'entities': entities
+                    'entities': entities,
+                    'allowed_users': self._get_allowed_users(provider)
                 }
             }, upsert=True
         )
@@ -214,12 +252,14 @@ class ReferentialService(object):
             'common_name': 1,
             'type': 1,
             'provider': 1,
+            'allowed_users': 1,
             '_id': 0})
         events = self.database.events.find({},{
             'id': 1,
             'common_name': 1,
             'type': 1,
             'provider': 1,
+            'allowed_users': 1,
             '_id': 0})
         for ref_entry in itertools.chain(entities, events):
             ngrams = self._make_ngrams(ref_entry['common_name'])
@@ -232,14 +272,15 @@ class ReferentialService(object):
                     'ngrams': ngrams,
                     'prefix_ngrams': pref_ngrams,
                     'type': ref_entry['type'],
-                    'provider': ref_entry['provider']
+                    'provider': ref_entry['provider'],
+                    'allowed_users': ref_entry['allowed_users']
                 }
             }, upsert=True)
         return True
 
     @rpc
     def update_entry_ngrams(self, entry_id):
-        project = {'id': 1,'common_name': 1,'type': 1,'provider': 1,'_id': 0}
+        project = {'id': 1,'common_name': 1,'type': 1,'provider': 1, 'allowed_users': 1,'_id': 0}
         entry = self.database.entities.find_one({'id': entry_id}, project)
         if not entry:
             entry = self.database.events.find_one({'id': entry_id}, project)
@@ -255,24 +296,28 @@ class ReferentialService(object):
                     'ngrams': ngrams,
                     'prefix_ngrams': pref_ngrams,
                     'type': entry['type'],
-                    'provider': entry['provider']
+                    'provider': entry['provider'],
+                    'allowed_users': entry['allowed_users']
                 }
         }, upsert=True)
         return entry_id
 
     @rpc
-    def get_event_by_id(self, id):
-        event = self.database.events.find_one({'id': id}, {'_id': 0})
+    def get_event_by_id(self, id, user):
+        event = self.database.events.find_one({'id': id, 'allowed_users': user}, 
+            {'_id': 0})
         return bson.json_util.dumps(event)
 
     @rpc
-    def get_events_by_entity_id(self, entity_id):
-        cursor = self.database.events.find({'entities.id': entity_id}, {'_id': 0})
+    def get_events_by_entity_id(self, entity_id, user):
+        cursor = self.database.events.find({'entities.id': entity_id, 'allowed_users': user}, 
+            {'_id': 0})
         return bson.json_util.dumps(list(cursor))
 
     @rpc
-    def get_events_by_name(self, name):
-        cursor = self.database.events.find({'$text': {'$search': name}}, {'_id': 0})
+    def get_events_by_name(self, name, user):
+        cursor = self.database.events.find({'$text': {'$search': name}, 'allowed_users': user}, 
+            {'_id': 0})
         return bson.json_util.dumps(list(cursor))
 
     @rpc
@@ -310,8 +355,8 @@ class ReferentialService(object):
         return list(self.database.labels.find({'id': ids}, {'_id': 0}))
 
     @rpc
-    def search_entity(self, name, type=None, provider=None):
-        query = {'$text': {'$search': name}}
+    def search_entity(self, name, user, type=None, provider=None):
+        query = {'$text': {'$search': name}, 'allowed_users': user}
         if type is not None:
             query['type'] = type
         if provider is not None:
@@ -320,7 +365,7 @@ class ReferentialService(object):
         return bson.json_util.dumps(list(cursor))
 
     @rpc
-    def search_event(self, name, date, type=None, provider=None):
+    def search_event(self, name, date, user, type=None, provider=None):
         start_date = dateutil.parser.parse(date)
         end_date = start_date + datetime.timedelta(days=1)
 
@@ -331,7 +376,8 @@ class ReferentialService(object):
             },
             '$text': {
                 '$search': name
-            }
+            },
+            'allowed_users': user
         }
 
         if type is not None:
@@ -343,9 +389,10 @@ class ReferentialService(object):
         return bson.json_util.dumps(list(cursor))
 
     @rpc
-    def fuzzy_search(self, query, type=None, provider=None):
+    def fuzzy_search(self, query, user, type=None, provider=None):
         query = {
             '$text': {'$search': self._make_ngrams(query)},
+            'allowed_users': user
         }
 
         if type is not None:
