@@ -23,17 +23,15 @@ class ReferentialService(object):
 
     database = MongoDatabase(result_backend=False)
 
-    def _write_subscription_in_collection(self, user, provider, collection):
-        self.database[collection].create_index([('id', ASCENDING), ('allowed_users', ASCENDING)])
-        self.database[collection].create_index('provider')
-        self.database[collection].create_index([('common_name', TEXT), 
-            ('allowed_users', ASCENDING)], default_language='english')
-        self.database[collection].update_many({'provider': provider},
-            {'$addToSet':{'allowed_users': user}})
-
     def _add_provider_subscription(self, user, provider):
         for collection in ('entities', 'events', 'search'):
-            self._write_subscription_in_collection(user, provider, collection)
+            self.database[collection].update_many({'provider': provider},
+                {'$addToSet':{'allowed_users': user}})
+
+    def _delete_provider_subscription(self, user, providers):
+        for collection in ('entities', 'events', 'search'):
+            self.database[collection].update_many({'provider': {'$in': providers}}, 
+                {'$pull': {'allowed_users': user}})
 
     def _add_picture_subscription(self, user, context, _format):
         pass
@@ -43,7 +41,13 @@ class ReferentialService(object):
         user = payload['user']
         if 'referential' in payload['subscription']:
             referential = payload['subscription']['referential']
+            old_sub = self.database.subscriptions.find_one({'user': user})
             if 'providers' in referential:
+                if old_sub:
+                    old_providers = set([r for r in old_sub['subscription']['providers']])
+                    new_providers = set(referential['providers'])
+                    diff = old_providers - new_providers
+                    self._delete_provider_subscription(user, list(diff))
                 for provider in referential['providers']:
                     self._add_provider_subscription(user, provider)
             if 'pictures' in referential:
@@ -88,11 +92,9 @@ class ReferentialService(object):
 
     @rpc
     def add_entity(self, id, common_name, provider, type, informations):
-        self.database.entities.create_index('id')
-        self.database.entities.create_index([('common_name', TEXT),
-                                             ('internationalization.translation', TEXT)],
-                                            default_language='english')
-
+        self.database.entities.create_index([('id', ASCENDING), ('allowed_users', ASCENDING)])
+        self.database.entities.create_index([('common_name', TEXT), ('allowed_users', ASCENDING)], 
+            default_language='english')
         self.database.entities.update_one(
             {'id': id},
             {'$set':
@@ -205,9 +207,9 @@ class ReferentialService(object):
 
     @rpc
     def add_event(self, id, date, provider, type, common_name, content, entities):
-        self.database.events.create_index([('entities.id', ASCENDING), ('date', DESCENDING)])
-        self.database.events.create_index('id', unique=True)
-        self.database.events.create_index([('common_name', TEXT)], default_language='english')
+        self.database.events.create_index([('id', ASCENDING), ('allowed_users', ASCENDING)])
+        self.database.events.create_index([('common_name', TEXT), ('allowed_users', ASCENDING)], 
+            default_language='english')
 
         p_date = dateutil.parser.parse(date)
 
@@ -244,7 +246,7 @@ class ReferentialService(object):
     @rpc
     def update_ngrams_search_collection(self):
         self.database.search.create_index([
-            ('ngrams', TEXT), ('prefix_ngrams', TEXT), ('type', ASCENDING), ('provider', ASCENDING)
+            ('ngrams', TEXT), ('prefix_ngrams', TEXT), ('allowed_users', ASCENDING)
         ], weights={'ngrams': 100, 'prefix_ngrams': 200})
 
         entities = self.database.entities.find({},{
