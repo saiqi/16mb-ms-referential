@@ -33,9 +33,6 @@ class ReferentialService(object):
             self.database[collection].update_many({'provider': {'$in': providers}}, 
                 {'$pull': {'allowed_users': user}})
 
-    def _add_picture_subscription(self, user, context, _format):
-        pass
-
     @event_handler('subscription_manager', 'user_sub')
     def handle_suscription(self, payload):
         user = payload['user']
@@ -50,9 +47,6 @@ class ReferentialService(object):
                     self._delete_provider_subscription(user, list(diff))
                 for provider in referential['providers']:
                     self._add_provider_subscription(user, provider)
-            if 'pictures' in referential:
-                for picture in referential['pictures']:
-                    self._add_picture_subscription(user, picture['context'], picture['format'])
             self.database.subscriptions.update_one({'user': user},
                 {'$set': {'subscription': referential}}, upsert=True)
 
@@ -181,8 +175,22 @@ class ReferentialService(object):
             {'_id': 0})
         return bson.json_util.dumps(list(cursor))
 
+    def _check_gridfs_access(self, id, context, user):
+        sub = self.database.subscriptions.find_one({
+            'user': user, 
+            'subscription.pictures': context
+        })
+        if not sub:
+            return False
+        entity = self.database.entities.find_one({'id': id, 'allowed_users': user})
+        if not entity:
+            return False
+        return True
+
     @rpc
-    def get_entity_picture(self, id, context, format):
+    def get_entity_picture(self, id, context, format, user):
+        if not self._check_gridfs_access(id, context, user):
+            return None
         fs = gridfs.GridFS(self.database)
         filename = self._filename('bitmap', id, context, format)
 
@@ -194,7 +202,9 @@ class ReferentialService(object):
         return None
 
     @rpc
-    def get_entity_logo(self, id, context, format):
+    def get_entity_logo(self, id, context, format, user):
+        if not self._check_gridfs_access(id, context, user):
+            return None
         fs = gridfs.GridFS(self.database)
         filename = self._filename('vectorial', id, context, format)
 
