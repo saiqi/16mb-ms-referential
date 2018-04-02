@@ -87,8 +87,7 @@ class ReferentialService(object):
     @rpc
     def add_entity(self, id, common_name, provider, type, informations):
         self.database.entities.create_index([('id', ASCENDING), ('allowed_users', ASCENDING)])
-        self.database.entities.create_index([('common_name', TEXT), ('allowed_users', ASCENDING)], 
-            default_language='english')
+        self.database.entities.create_index([('common_name', TEXT)], default_language='english')
         self.database.entities.update_one(
             {'id': id},
             {'$set':
@@ -218,8 +217,7 @@ class ReferentialService(object):
     @rpc
     def add_event(self, id, date, provider, type, common_name, content, entities):
         self.database.events.create_index([('id', ASCENDING), ('allowed_users', ASCENDING)])
-        self.database.events.create_index([('common_name', TEXT), ('allowed_users', ASCENDING)], 
-            default_language='english')
+        self.database.events.create_index([('common_name', TEXT)], default_language='english')
 
         p_date = dateutil.parser.parse(date)
 
@@ -256,7 +254,7 @@ class ReferentialService(object):
     @rpc
     def update_ngrams_search_collection(self):
         self.database.search.create_index([
-            ('ngrams', TEXT), ('prefix_ngrams', TEXT), ('allowed_users', ASCENDING)
+            ('ngrams', TEXT), ('prefix_ngrams', TEXT)
         ], weights={'ngrams': 100, 'prefix_ngrams': 200})
 
         entities = self.database.entities.find({},{
@@ -292,6 +290,9 @@ class ReferentialService(object):
 
     @rpc
     def update_entry_ngrams(self, entry_id):
+        self.database.search.create_index([
+            ('ngrams', TEXT), ('prefix_ngrams', TEXT)
+        ], weights={'ngrams': 100, 'prefix_ngrams': 200})
         project = {'id': 1,'common_name': 1,'type': 1,'provider': 1, 'allowed_users': 1,'_id': 0}
         entry = self.database.entities.find_one({'id': entry_id}, project)
         if not entry:
