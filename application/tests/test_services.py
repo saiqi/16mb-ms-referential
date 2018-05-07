@@ -140,6 +140,23 @@ def test_get_event_by_id(database):
     assert event['id'] == '0'
 
 
+def test_get_events_by_date(database):
+    service = worker_factory(ReferentialService, database=database)
+    database.events.insert_one({
+        'id': '0',
+        'date': datetime.datetime(2018, 5, 7, 14, 30),
+        'provider': 'provider',
+        'type': 'type',
+        'common_name': 'Name',
+        'content': 'New Movie',
+        'entities': [{'common_name': 'Bradley', 'id': 'b1'}],
+        'allowed_users': ['admin']
+    })
+    events = bson.json_util.loads(service.get_events_by_date('2018-05-07', 'admin'))
+    assert len(events) == 1
+    assert events[0]['id'] == '0'   
+
+
 def test_get_events_by_entity_id(database):
     service = worker_factory(ReferentialService, database=database)
     database.events.insert_many([

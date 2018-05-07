@@ -334,6 +334,14 @@ class ReferentialService(object):
         return bson.json_util.dumps(list(cursor))
 
     @rpc
+    def get_events_by_date(self, date, user):
+        start_date = dateutil.parser.parse(date)
+        end_date = start_date + datetime.timedelta(days=1)
+        cursor = self.database.events.find({'date': {'$gte': start_date,'$lt': end_date},
+            'allowed_users': user})
+        return bson.json_util.dumps(list(cursor))
+
+    @rpc
     def add_label(self, id, language, context, label):
         self.database.labels.create_index([('id', ASCENDING),
                                            ('language', ASCENDING), ('context', ASCENDING)], unique=True)
