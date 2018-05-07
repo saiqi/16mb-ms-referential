@@ -334,10 +334,8 @@ class ReferentialService(object):
         return bson.json_util.dumps(list(cursor))
 
     @rpc
-    def get_events_by_date(self, date, user):
-        start_date = dateutil.parser.parse(date)
-        end_date = start_date + datetime.timedelta(days=1)
-        cursor = self.database.events.find({'date': {'$gte': start_date,'$lt': end_date},
+    def get_events_between_dates(self, start_date, end_date, user):
+        cursor = self.database.events.find({'date': {'$gte': dateutil.parser.parse(start_date),'$lt': dateutil.parser.parse(end_date)},
             'allowed_users': user})
         return bson.json_util.dumps(list(cursor))
 
