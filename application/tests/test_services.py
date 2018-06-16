@@ -80,6 +80,32 @@ def test_delete_translation(database):
     assert 'internationalization' not in result
 
 
+def test_add_multiline(database):
+    service = worker_factory(ReferentialService, database=database)
+
+    database.entities.insert_one({'id': '0', 'common_name': 'The Hangover', 'provider': 'me',
+                                  'type': 'movie', 'informations': {'starring': 'Bradley Cooper'}})
+    database.entities.create_index('id')
+
+    service.add_multiline_to_entity('0', {'line1': 'The', 'line2': 'Hangover'})
+    result = database.entities.find_one({'id': '0'})
+    assert result['multiline']['line1'] == 'The'
+    assert result['multiline']['line2'] == 'Hangover'
+
+
+def test_delete_multiline(database):
+    service = worker_factory(ReferentialService, database=database)
+
+    database.entities.insert_one({'id': '0', 'common_name': 'The Hangover', 'provider': 'me',
+                                  'type': 'movie', 'informations': {'starring': 'Bradley Cooper'},
+                                  'multiline': {'line1': 'The', 'line2': 'Hangover'}})
+    database.entities.create_index('id')
+
+    service.delete_multiline_from_entity('0')
+    result = database.entities.find_one({'id': '0'})
+    assert 'multiline' not in result
+
+
 def test_get_entity_by_id(database):
     service = worker_factory(ReferentialService, database=database)
 

@@ -119,7 +119,7 @@ class ReferentialService(object):
         entity = self.database.entities.find_one({'id': id}, {'id': 1, 'internationalization': 1})
 
         if not entity:
-            raise ReferentialServiceError('No entity found with id {}'.format(id))
+            raise ReferentialServiceError('Entity not found with id {}'.format(id))
 
         if 'internationalization' not in entity:
             entity['internationalization'] = {language: translation}
@@ -137,6 +137,23 @@ class ReferentialService(object):
         self.database.entities.update_one({'id': id}, {'$unset': {'internationalization': {language: ''}}})
 
         return {'id': id, 'language': language}
+
+    @rpc
+    def add_multiline_to_entity(self, id, multiline):
+        entity = self.database.entities.find_one({'id': id}, {'id': 1, 'multiline': 1})
+
+        if not entity:
+            raise ReferentialServiceError('Entity not found with id {}'.format(id))
+
+        self.database.entities.update_one({'id': id}, {'$set': {'multiline': multiline}})
+
+        return {'id': id}
+
+    @rpc 
+    def delete_multiline_from_entity(self, id):
+        self.database.entities.update_one({'id': id}, {'$unset': {'multiline': ''}})
+
+        return {'id': id}
 
     @rpc
     def add_picture_to_entity(self, id, context, format, picture_b64):
