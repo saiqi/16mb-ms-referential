@@ -351,6 +351,12 @@ class ReferentialService(object):
         return bson.json_util.dumps(list(cursor))
 
     @rpc
+    def get_events_between_dates(self, start_date, end_date, user):
+        cursor = self.database.events.find({'date': {'$gte': dateutil.parser.parse(start_date),'$lt': dateutil.parser.parse(end_date)},
+            'allowed_users': user}, {'_id': 0})
+        return bson.json_util.dumps(list(cursor))
+
+    @rpc
     def add_label(self, id, language, context, label):
         self.database.labels.create_index([('id', ASCENDING),
                                            ('language', ASCENDING), ('context', ASCENDING)], unique=True)
