@@ -165,13 +165,13 @@ class ReferentialService(object):
     @rpc
     def get_entity_by_id(self, id, user):
         entity = self.database.entities.find_one({'id': id, 'allowed_users': user}, 
-            {'_id': 0})
+            {'_id': 0, 'allowed_users': 0})
         return bson.json_util.dumps(entity)
 
     @rpc
     def get_entities_by_name(self, name, user):
         cursor = self.database.entities.find({'$text': {'$search': name}, 'allowed_users':user}, 
-            {'_id': 0})
+            {'_id': 0, 'allowed_users': 0})
         return bson.json_util.dumps(list(cursor))
 
     def _check_gridfs_access(self, id, context, user):
@@ -318,19 +318,19 @@ class ReferentialService(object):
     @rpc
     def get_event_by_id(self, id, user):
         event = self.database.events.find_one({'id': id, 'allowed_users': user}, 
-            {'_id': 0})
+            {'_id': 0, 'allowed_users': 0})
         return bson.json_util.dumps(event)
 
     @rpc
     def get_events_by_entity_id(self, entity_id, user):
         cursor = self.database.events.find({'entities.id': entity_id, 'allowed_users': user}, 
-            {'_id': 0})
+            {'_id': 0, 'allowed_users': 0})
         return bson.json_util.dumps(list(cursor))
 
     @rpc
     def get_events_by_name(self, name, user):
         cursor = self.database.events.find({'$text': {'$search': name}, 'allowed_users': user}, 
-            {'_id': 0})
+            {'_id': 0, 'allowed_users': 0})
         return bson.json_util.dumps(list(cursor))
 
     @rpc
@@ -374,7 +374,7 @@ class ReferentialService(object):
             query['type'] = type
         if provider is not None:
             query['provider'] = provider
-        cursor = self.database.entities.find(query, {'_id': 0})
+        cursor = self.database.entities.find(query, {'_id': 0, 'allowed_users': 0})
         return bson.json_util.dumps(list(cursor))
 
     @rpc
@@ -398,7 +398,7 @@ class ReferentialService(object):
         if provider is not None:
             query['provider'] = provider
 
-        cursor = self.database.events.find(query, {'_id': 0})
+        cursor = self.database.events.find(query, {'_id': 0, 'allowed_users': 0})
         return bson.json_util.dumps(list(cursor))
 
     @rpc
