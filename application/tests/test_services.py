@@ -223,6 +223,9 @@ def test_get_events_by_entity_id(database):
     result = bson.json_util.loads(service.get_events_by_entity_id('b1', 'admin'))
     assert len(result) == 2
 
+    result = bson.json_util.loads(service.get_events_by_entity_id('b1', 'admin', 1))
+    assert len(result) == 1
+
 
 def test_get_events_by_name(database):
     service = worker_factory(ReferentialService, database=database)

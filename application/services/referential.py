@@ -339,9 +339,13 @@ class ReferentialService(object):
         return bson.json_util.dumps(event)
 
     @rpc
-    def get_events_by_entity_id(self, entity_id, user):
-        cursor = self.database.events.find({'entities.id': entity_id, 'allowed_users': user}, 
-            {'_id': 0, 'allowed_users': 0})
+    def get_events_by_entity_id(self, entity_id, user, limit=-1):
+        if limit < 0:
+            cursor = self.database.events.find({'entities.id': entity_id, 'allowed_users': user}, 
+                {'_id': 0, 'allowed_users': 0}).sort('date', -1)
+        else:
+            cursor = self.database.events.find({'entities.id': entity_id, 'allowed_users': user}, 
+                {'_id': 0, 'allowed_users': 0}).sort('date', -1).limit(limit)
         return bson.json_util.dumps(list(cursor))
 
     @rpc
