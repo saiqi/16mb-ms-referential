@@ -349,6 +349,16 @@ class ReferentialService(object):
         return bson.json_util.dumps(list(cursor))
 
     @rpc
+    def get_event_filtered_by_entities(self, id, entity_ids, user):
+        event = self.database.events.find_one({
+            'id': id,
+            'allowed_users': user,
+            'entities.id': {'$all': entity_ids}
+        }, {'_id': 0, 'allowed_users': 0})
+
+        return bson.json_util.dumps(event)
+
+    @rpc
     def get_events_by_name(self, name, user):
         cursor = self.database.events.find({'$text': {'$search': name}, 'allowed_users': user}, 
             {'_id': 0, 'allowed_users': 0})

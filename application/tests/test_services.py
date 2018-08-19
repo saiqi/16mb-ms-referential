@@ -227,6 +227,48 @@ def test_get_events_by_entity_id(database):
     assert len(result) == 1
 
 
+def test_get_events_by_entity_id(database):
+    service = worker_factory(ReferentialService, database=database)
+    database.events.insert_many([
+        {
+            'id': '0',
+            'date': datetime.datetime.now(),
+            'provider': 'provider',
+            'type': 'type',
+            'common_name': 'Name',
+            'content': 'New Movie',
+            'entities': [{'common_name': 'Bradley', 'id': 'b1'}, {'common_name': 'Johnny', 'id': 'j1'}],
+            'allowed_users': ['admin']
+        },
+        {
+            'id': '1',
+            'date': datetime.datetime.now(),
+            'provider': 'provider',
+            'type': 'type',
+            'common_name': 'Name',
+            'content': 'New Movie',
+            'entities': [{'common_name': 'Bradley', 'id': 'b1'}],
+            'allowed_users': ['admin']
+        },
+        {
+            'id': '2',
+            'date': datetime.datetime.now(),
+            'provider': 'provider',
+            'type': 'type',
+            'common_name': 'Name',
+            'content': 'New Movie',
+            'entities': [{'common_name': 'Johnny', 'id': 'j1'}],
+            'allowed_users': ['admin']
+        }
+    ])
+    result = bson.json_util.loads(service.get_event_filtered_by_entities('0', ['b1', 'j1'], 'admin'))
+    assert result
+    assert result['id'] == '0'
+
+    result = bson.json_util.loads(service.get_event_filtered_by_entities('1', ['b1', 'j1'], 'admin'))
+    assert not result
+
+
 def test_get_events_by_name(database):
     service = worker_factory(ReferentialService, database=database)
     database.events.create_index([('common_name', TEXT)], default_language='english')
