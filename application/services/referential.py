@@ -388,7 +388,7 @@ class ReferentialService(object):
         result = list(cursor)
         if len(result) == 0:
             _log.warning('No result found!')
-        return bson.json_util.dumps(list(cursor))
+        return bson.json_util.dumps(result)
 
     @rpc
     def add_label(self, id, language, context, label):
