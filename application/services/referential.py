@@ -1,3 +1,4 @@
+import logging
 import hashlib
 import binascii
 import tempfile
@@ -7,12 +8,25 @@ import itertools
 import string
 from nameko.rpc import rpc
 from nameko.events import event_handler
+from nameko.dependency_providers import DependencyProvider
 from nameko_mongodb.database import MongoDatabase
 from pymongo import TEXT, ASCENDING, DESCENDING
 import gridfs
 import bson.json_util
 import dateutil.parser
 
+
+_log = logging.getLogger(__name__)
+
+
+class ErrorHandler(DependencyProvider):
+
+    def worker_result(self, worker_ctx, res, exc_info):
+        if exc_info is None:
+            return
+
+        exc_type, exc, tb = exc_info
+        _log.error(str(exc))
 
 class ReferentialServiceError(Exception):
     pass
@@ -24,11 +38,13 @@ class ReferentialService(object):
     database = MongoDatabase(result_backend=False)
 
     def _add_provider_subscription(self, user, provider):
+        _log.info(f'Adding {user} subscription to provider: {provider} ...')
         for collection in ('entities', 'events', 'search'):
             self.database[collection].update_many({'provider': provider},
                 {'$addToSet':{'allowed_users': user}})
 
     def _delete_provider_subscription(self, user, providers):
+        _log.info(f'Deleting {user} subscriptions to providers: {providers} ...')
         for collection in ('entities', 'events', 'search'):
             self.database[collection].update_many({'provider': {'$in': providers}}, 
                 {'$pull': {'allowed_users': user}})
@@ -366,8 +382,12 @@ class ReferentialService(object):
 
     @rpc
     def get_events_between_dates(self, start_date, end_date, user):
+        _log.info(f'{user} is searching for allowed events between {start_date} and {end_date} ...')
         cursor = self.database.events.find({'date': {'$gte': dateutil.parser.parse(start_date),'$lt': dateutil.parser.parse(end_date)},
             'allowed_users': user}, {'_id': 0})
+        result = list(cursor)
+        if len(result) == 0:
+            _log.warning('No result found!')
         return bson.json_util.dumps(list(cursor))
 
     @rpc
