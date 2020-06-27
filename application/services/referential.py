@@ -172,26 +172,17 @@ class ReferentialService(object):
         return {'id': id}
 
     @rpc
-    def add_picture_to_entity(self, id, context, format, picture_b64):
-        filename = self._filename('bitmap', id, context, format)
-        self._add_file_to_gridfs(filename, picture_b64, is_base64=True)
+    def add_picture_to_entity(self, id, context, format, content, kind='bitmap'):
+        filename = self._filename(kind, id, context, format)
+        if kind == 'bitmap':
+            self._add_file_to_gridfs(filename, content, is_base64=True)
+        else:
+            self._add_file_to_gridfs(filename, content)
         return {'id': id, 'context': context, 'format': format}
 
     @rpc
-    def add_logo_to_entity(self, id, context, format, svg_string):
-        filename = self._filename('vectorial', id, context, format)
-        self._add_file_to_gridfs(filename, svg_string)
-        return {'id': id, 'context': context, 'format': format}
-
-    @rpc
-    def delete_picture_from_entity(self, id, context, format):
-        filename = self._filename('bitmap', id, context, format)
-        self._delete_file_from_gridfs(filename)
-        return {'id': id, 'context': context, 'format': format}
-
-    @rpc
-    def delete_logo_from_entity(self, id, context, format):
-        filename = self._filename('vectorial', id, context, format)
+    def delete_picture_from_entity(self, id, context, format, kind='bitmap'):
+        filename = self._filename(kind, id, context, format)
         self._delete_file_from_gridfs(filename)
         return {'id': id, 'context': context, 'format': format}
 
@@ -220,32 +211,21 @@ class ReferentialService(object):
         return True
 
     @rpc
-    def get_entity_picture(self, id, context, format, user):
+    def get_entity_picture(self, id, context, format, user, kind='bitmap'):
         if not self._check_gridfs_access(id, context, user):
             return None
         fs = gridfs.GridFS(self.database)
-        filename = self._filename('bitmap', id, context, format)
+        filename = self._filename(kind, id, context, format)
 
         file = fs.find_one({'filename': filename})
 
-        if file:
+        if not file:
+            return None
+        
+        if kind == 'bitmap':
             return base64.b64encode(binascii.unhexlify(file.read())).decode('utf-8')
 
-        return None
-
-    @rpc
-    def get_entity_logo(self, id, context, format, user):
-        if not self._check_gridfs_access(id, context, user):
-            return None
-        fs = gridfs.GridFS(self.database)
-        filename = self._filename('vectorial', id, context, format)
-
-        file = fs.find_one({'filename': filename})
-
-        if file:
-            return file.read().decode('utf-8')
-
-        return None
+        return file.read().decode('utf-8')
 
     @rpc
     def add_event(self, id, date, provider, type, common_name, content, entities):
