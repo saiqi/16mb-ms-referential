@@ -101,20 +101,21 @@ class ReferentialService(object):
         return [r['user'] for r in sub]
 
     @rpc
-    def add_entity(self, id, common_name, provider, type, informations):
+    def add_entity(self, id, common_name, provider, type, informations = None):
         self.database.entities.create_index([('id', ASCENDING), ('allowed_users', ASCENDING)])
         self.database.entities.create_index([('common_name', TEXT)], default_language='english')
+
+        update = {
+            'common_name': common_name,
+            'provider': provider,
+            'type': type,
+            'allowed_users': self._get_allowed_users(provider)
+        }
+        if informations:
+            update.update({'informations': informations})
+
         self.database.entities.update_one(
-            {'id': id},
-            {'$set':
-                {
-                    'common_name': common_name,
-                    'provider': provider,
-                    'informations': informations,
-                    'type': type,
-                    'allowed_users': self._get_allowed_users(provider)
-                }
-            }, upsert=True)
+            {'id': id}, {'$set': update}, upsert=True)
 
         return {'id': id}
 
